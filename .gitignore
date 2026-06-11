@@ -113,3 +113,5 @@ dist
 .claude/worktrees
 .nx/polygraph
 .nx/self-healing
+# Electron build output
+out/
