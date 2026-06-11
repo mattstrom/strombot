@@ -9,6 +9,7 @@ export interface ThreadSummary {
 	title: string;
 	updatedAt: string;
 	projectId?: string;
+	pinned?: boolean;
 }
 
 export interface Project {

@@ -6,6 +6,8 @@ import {
 	FolderMinus,
 	MoreHorizontal,
 	Pencil,
+	Pin,
+	PinOff,
 	Plus,
 	Settings,
 	Trash2,
@@ -23,6 +25,7 @@ import {
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { pinnedFirst } from '@/stores/conversation-store';
 import { useStores } from '@/stores/store-context';
 
 const ThreadListItem = observer(function ThreadListItem({ thread }: { thread: ThreadSummary }) {
@@ -40,10 +43,11 @@ const ThreadListItem = observer(function ThreadListItem({ thread }: { thread: Th
 		>
 			<button
 				type="button"
-				className="min-w-0 flex-1 truncate px-3 py-2 text-left"
+				className="flex min-w-0 flex-1 items-center gap-1.5 px-3 py-2 text-left"
 				onClick={() => void chat.openThread(thread.id)}
 			>
-				{thread.title}
+				{thread.pinned && <Pin className="size-3 shrink-0 text-muted-foreground" />}
+				<span className="truncate">{thread.title}</span>
 			</button>
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
@@ -56,6 +60,10 @@ const ThreadListItem = observer(function ThreadListItem({ thread }: { thread: Th
 					</Button>
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="start" side="bottom">
+					<DropdownMenuItem onClick={() => void conversations.togglePin(thread.id)}>
+						{thread.pinned ? <PinOff /> : <Pin />}
+						{thread.pinned ? 'Unpin' : 'Pin'}
+					</DropdownMenuItem>
 					<DropdownMenuItem onClick={() => conversations.openRenameDialog(thread.id)}>
 						<Pencil />
 						Rename
@@ -172,8 +180,10 @@ export const Sidebar = observer(function Sidebar() {
 	const { chat, conversations, projects, settings } = useStores();
 	// Threads pointing at a deleted project fall back to the ungrouped list.
 	const projectIds = new Set(projects.projects.map((project) => project.id));
-	const ungrouped = conversations.threads.filter(
-		(thread) => !thread.projectId || !projectIds.has(thread.projectId),
+	const ungrouped = pinnedFirst(
+		conversations.threads.filter(
+			(thread) => !thread.projectId || !projectIds.has(thread.projectId),
+		),
 	);
 
 	return (
