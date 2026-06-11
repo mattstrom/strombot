@@ -55,11 +55,13 @@ export class ChatStore {
 
 	startNewChat(projectId?: string): void {
 		this.root.conversations.startNewChat(projectId);
+		this.root.projects.closePage();
 		this.error = undefined;
 	}
 
 	async openThread(id: string): Promise<void> {
 		this.root.conversations.select(id);
+		this.root.projects.closePage();
 		this.error = undefined;
 		if (this.loadedThreads.has(id) || this.streams.has(id)) {
 			return;
@@ -143,6 +145,11 @@ export class ChatStore {
 			// Refresh twice: thread titles are generated asynchronously after the stream ends.
 			void this.root.conversations.load();
 			setTimeout(() => void this.root.conversations.load(), 3000);
+			// The agent may have written workspace files during the turn.
+			const pageId = this.root.projects.activePageId;
+			if (pageId) {
+				void this.root.projects.loadFiles(pageId);
+			}
 		} else if (chunk.type === 'error') {
 			this.streams.delete(chunk.threadId);
 			this.error = chunk.error ?? 'Something went wrong.';

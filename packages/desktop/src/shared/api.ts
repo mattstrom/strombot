@@ -6,7 +6,9 @@ import type {
 	SendMessageResult,
 	Settings,
 	ThreadSummary,
+	UpdateProjectInput,
 	UpdateSettings,
+	WorkspaceListing,
 } from './types';
 
 export interface StrombotApi {
@@ -28,7 +30,21 @@ export interface StrombotApi {
 		list(): Promise<Project[]>;
 		create(name: string): Promise<Project>;
 		rename(id: string, name: string): Promise<void>;
+		update(id: string, update: UpdateProjectInput): Promise<void>;
 		remove(id: string): Promise<void>;
+		getMemory(id: string): Promise<string>;
+		setMemory(id: string, content: string): Promise<void>;
+		listFiles(id: string): Promise<WorkspaceListing>;
+		addFiles(id: string, paths: string[]): Promise<WorkspaceListing>;
+		addFilesViaDialog(id: string): Promise<WorkspaceListing | null>;
+		removeFile(id: string, relPath: string): Promise<WorkspaceListing>;
+		revealFile(id: string, relPath?: string): Promise<void>;
+		linkWorkspace(id: string): Promise<Project | null>;
+		unlinkWorkspace(id: string): Promise<Project>;
+	};
+	files: {
+		// Resolves a dragged File's absolute path (webUtils lives in the preload).
+		getPathForFile(file: File): string;
 	};
 	settings: {
 		get(): Promise<Settings>;
