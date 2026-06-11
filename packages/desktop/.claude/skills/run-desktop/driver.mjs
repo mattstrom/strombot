@@ -61,7 +61,10 @@ let page = null;
 
 const COMMANDS = {
 	async launch() {
-		if (app) return console.log('already launched');
+		if (app) {
+			return console.log('already launched');
+		}
+
 		if (!fs.existsSync(path.join(APP_DIR, 'out/main/index.js'))) {
 			return console.log(
 				'ERROR: out/main/index.js missing — run `npm run build` in packages/desktop first',
@@ -79,7 +82,10 @@ const COMMANDS = {
 	},
 
 	async ss(name) {
-		if (!page) return console.log('ERROR: launch first');
+		if (!page) {
+			return console.log('ERROR: launch first');
+		}
+
 		const f = path.join(SHOT_DIR, `${name || `ss-${Date.now()}`}.png`);
 		await page.screenshot({ path: f });
 		console.log('screenshot:', f);
@@ -87,24 +93,37 @@ const COMMANDS = {
 
 	// DOM click — fine for plain buttons, does NOT open Radix dropdown menus.
 	async click(sel) {
-		if (!page) return console.log('ERROR: launch first');
+		if (!page) {
+			return console.log('ERROR: launch first');
+		}
+
 		const r = await page.evaluate((s) => {
 			const el = document.querySelector(s);
-			if (!el) return 'NOT_FOUND';
+			if (!el) {
+				return 'NOT_FOUND';
+			}
+
 			el.click();
+
 			return 'OK';
 		}, sel);
 		console.log('click', sel, '→', r);
 	},
 
 	async 'click-text'(text) {
-		if (!page) return console.log('ERROR: launch first');
+		if (!page) {
+			return console.log('ERROR: launch first');
+		}
+
 		const r = await page.evaluate((t) => {
 			const els = [...document.querySelectorAll('button, a, [role="button"], [role="menuitem"]')];
 			const el =
 				els.find((e) => e.textContent?.trim() === t) ?? els.find((e) => e.textContent?.includes(t));
-			if (!el) return 'NOT_FOUND';
+			if (!el) {
+				return 'NOT_FOUND';
+			}
 			el.click();
+
 			return 'OK: ' + el.tagName;
 		}, text);
 		console.log('click-text', JSON.stringify(text), '→', r);
@@ -113,7 +132,10 @@ const COMMANDS = {
 	// Real pointer click via Playwright locator (supports `:has-text()`, `>> nth=`).
 	// Required for Radix dropdown triggers and menu items.
 	async ptr(sel) {
-		if (!page) return console.log('ERROR: launch first');
+		if (!page) {
+			return console.log('ERROR: launch first');
+		}
+
 		try {
 			await page.locator(sel).first().click({ timeout: 5000 });
 			console.log('ptr', sel, '→ OK');
@@ -123,7 +145,10 @@ const COMMANDS = {
 	},
 
 	async hover(sel) {
-		if (!page) return console.log('ERROR: launch first');
+		if (!page) {
+			return console.log('ERROR: launch first');
+		}
+
 		try {
 			await page.locator(sel).first().hover({ timeout: 5000 });
 			console.log('hover', sel, '→ OK');
@@ -133,16 +158,25 @@ const COMMANDS = {
 	},
 
 	async type(text) {
-		if (page) await page.keyboard.type(text, { delay: 20 });
+		if (page) {
+			await page.keyboard.type(text, { delay: 20 });
+		}
+
 		console.log('typed');
 	},
 	async press(key) {
-		if (page) await page.keyboard.press(key);
+		if (page) {
+			await page.keyboard.press(key);
+		}
+
 		console.log('pressed', key);
 	},
 
 	async eval(expr) {
-		if (!page) return console.log('ERROR: launch first');
+		if (!page) {
+			return console.log('ERROR: launch first');
+		}
+
 		try {
 			console.log(JSON.stringify(await page.evaluate(expr)));
 		} catch (e) {
@@ -151,7 +185,10 @@ const COMMANDS = {
 	},
 
 	async text(sel) {
-		if (!page) return console.log('ERROR: launch first');
+		if (!page) {
+			return console.log('ERROR: launch first');
+		}
+
 		console.log(
 			await page.evaluate(
 				(s) => (s ? document.querySelector(s) : document.body)?.innerText ?? '(null)',
@@ -161,7 +198,10 @@ const COMMANDS = {
 	},
 
 	async quit() {
-		if (app) await app.close().catch(() => {});
+		if (app) {
+			await app.close().catch(() => {});
+		}
+
 		app = null;
 		page = null;
 	},
@@ -176,10 +216,14 @@ const rl = readline.createInterface({ input: stdin, output: process.stdout, prom
 
 rl.on('line', async (line) => {
 	const [cmd, ...rest] = line.trim().split(/\s+/);
-	if (!cmd) return rl.prompt();
+	if (!cmd) {
+		return rl.prompt();
+	}
+
 	const fn = COMMANDS[cmd];
 	if (!fn) {
 		console.log('unknown:', cmd, '— try: help');
+
 		return rl.prompt();
 	}
 	try {
@@ -187,10 +231,12 @@ rl.on('line', async (line) => {
 	} catch (e) {
 		console.log('ERROR:', e.message.split('\n')[0]);
 	}
+
 	if (cmd === 'quit') {
 		rl.close();
 		process.exit(0);
 	}
+
 	rl.prompt();
 });
 rl.on('close', async () => {
