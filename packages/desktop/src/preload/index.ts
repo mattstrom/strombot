@@ -20,10 +20,17 @@ const api: StrombotApi = {
 	},
 	threads: {
 		list: () => ipcRenderer.invoke('threads:list'),
-		create: () => ipcRenderer.invoke('threads:create'),
+		create: (projectId) => ipcRenderer.invoke('threads:create', projectId),
 		remove: (id) => ipcRenderer.invoke('threads:remove', id),
 		rename: (id, title) => ipcRenderer.invoke('threads:rename', id, title),
+		move: (id, projectId) => ipcRenderer.invoke('threads:move', id, projectId),
 		messages: (id) => ipcRenderer.invoke('threads:messages', id),
+	},
+	projects: {
+		list: () => ipcRenderer.invoke('projects:list'),
+		create: (name) => ipcRenderer.invoke('projects:create', name),
+		rename: (id, name) => ipcRenderer.invoke('projects:rename', id, name),
+		remove: (id) => ipcRenderer.invoke('projects:remove', id),
 	},
 	settings: {
 		get: () => ipcRenderer.invoke('settings:get'),

@@ -1,5 +1,15 @@
-import type { ThreadSummary } from '@shared/types';
-import { MoreHorizontal, Pencil, Plus, Settings, Trash2 } from 'lucide-react';
+import type { Project, ThreadSummary } from '@shared/types';
+import {
+	ChevronRight,
+	Folder,
+	FolderInput,
+	FolderMinus,
+	MoreHorizontal,
+	Pencil,
+	Plus,
+	Settings,
+	Trash2,
+} from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 
 import { Button } from '@/components/ui/button';
@@ -7,14 +17,19 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuSub,
+	DropdownMenuSubContent,
+	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { useStores } from '@/stores/store-context';
 
 const ThreadListItem = observer(function ThreadListItem({ thread }: { thread: ThreadSummary }) {
-	const { chat, conversations } = useStores();
+	const { chat, conversations, projects } = useStores();
 	const isActive = conversations.activeThreadId === thread.id;
+	const moveTargets = projects.projects.filter((project) => project.id !== thread.projectId);
+	const canMove = moveTargets.length > 0 || thread.projectId !== undefined;
 
 	return (
 		<div
@@ -45,6 +60,34 @@ const ThreadListItem = observer(function ThreadListItem({ thread }: { thread: Th
 						<Pencil />
 						Rename
 					</DropdownMenuItem>
+					{canMove && (
+						<DropdownMenuSub>
+							<DropdownMenuSubTrigger>
+								<FolderInput />
+								Move to project
+							</DropdownMenuSubTrigger>
+							<DropdownMenuSubContent>
+								{moveTargets.map((project) => (
+									<DropdownMenuItem
+										key={project.id}
+										onClick={() => {
+											void conversations.move(thread.id, project.id);
+											projects.expand(project.id);
+										}}
+									>
+										<Folder />
+										{project.name}
+									</DropdownMenuItem>
+								))}
+								{thread.projectId !== undefined && (
+									<DropdownMenuItem onClick={() => void conversations.move(thread.id, undefined)}>
+										<FolderMinus />
+										Remove from project
+									</DropdownMenuItem>
+								)}
+							</DropdownMenuSubContent>
+						</DropdownMenuSub>
+					)}
 					<DropdownMenuItem
 						variant="destructive"
 						onClick={() => void conversations.remove(thread.id)}
@@ -58,8 +101,80 @@ const ThreadListItem = observer(function ThreadListItem({ thread }: { thread: Th
 	);
 });
 
+const ProjectListItem = observer(function ProjectListItem({ project }: { project: Project }) {
+	const { chat, conversations, projects } = useStores();
+	const isExpanded = projects.expandedIds.has(project.id);
+	const threads = conversations.threadsInProject(project.id);
+
+	return (
+		<div>
+			<div className="group flex items-center rounded-md text-sm hover:bg-accent/60">
+				<button
+					type="button"
+					className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-2 text-left"
+					onClick={() => projects.toggleExpanded(project.id)}
+				>
+					<ChevronRight
+						className={cn('size-3.5 shrink-0 transition-transform', isExpanded && 'rotate-90')}
+					/>
+					<Folder className="size-4 shrink-0 text-muted-foreground" />
+					<span className="truncate">{project.name}</span>
+				</button>
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<Button
+							variant="ghost"
+							size="icon"
+							className="mr-1 size-6 shrink-0 opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100"
+						>
+							<MoreHorizontal />
+						</Button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="start" side="bottom">
+						<DropdownMenuItem
+							onClick={() => {
+								chat.startNewChat(project.id);
+								projects.expand(project.id);
+							}}
+						>
+							<Plus />
+							New chat
+						</DropdownMenuItem>
+						<DropdownMenuItem onClick={() => projects.openRenameDialog(project.id)}>
+							<Pencil />
+							Rename
+						</DropdownMenuItem>
+						<DropdownMenuItem
+							variant="destructive"
+							onClick={() => void projects.remove(project.id)}
+						>
+							<Trash2 />
+							Delete
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			</div>
+			{isExpanded && (
+				<div className="ml-3.5 space-y-0.5 border-l pl-1.5">
+					{threads.map((thread) => (
+						<ThreadListItem key={thread.id} thread={thread} />
+					))}
+					{threads.length === 0 && (
+						<p className="px-3 py-2 text-xs text-muted-foreground">No chats yet</p>
+					)}
+				</div>
+			)}
+		</div>
+	);
+});
+
 export const Sidebar = observer(function Sidebar() {
-	const { chat, conversations, settings } = useStores();
+	const { chat, conversations, projects, settings } = useStores();
+	// Threads pointing at a deleted project fall back to the ungrouped list.
+	const projectIds = new Set(projects.projects.map((project) => project.id));
+	const ungrouped = conversations.threads.filter(
+		(thread) => !thread.projectId || !projectIds.has(thread.projectId),
+	);
 
 	return (
 		<aside className="flex w-64 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground">
@@ -76,13 +191,37 @@ export const Sidebar = observer(function Sidebar() {
 					New chat
 				</Button>
 			</div>
-			<nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-2">
-				{conversations.threads.map((thread) => (
-					<ThreadListItem key={thread.id} thread={thread} />
-				))}
-				{conversations.threads.length === 0 && (
-					<p className="px-3 py-2 text-xs text-muted-foreground">No conversations yet</p>
-				)}
+			<nav className="flex-1 overflow-y-auto px-3 py-2">
+				<div className="mb-1 flex h-6 items-center justify-between pl-2">
+					<span className="text-xs font-medium text-muted-foreground">Projects</span>
+					<Button
+						variant="ghost"
+						size="icon"
+						className="size-6"
+						onClick={() => projects.openCreateDialog()}
+					>
+						<Plus />
+					</Button>
+				</div>
+				<div className="space-y-0.5">
+					{projects.projects.map((project) => (
+						<ProjectListItem key={project.id} project={project} />
+					))}
+					{projects.projects.length === 0 && (
+						<p className="px-2 py-1 text-xs text-muted-foreground">No projects yet</p>
+					)}
+				</div>
+				<div className="mb-1 mt-4 flex h-6 items-center pl-2">
+					<span className="text-xs font-medium text-muted-foreground">Chats</span>
+				</div>
+				<div className="space-y-0.5">
+					{ungrouped.map((thread) => (
+						<ThreadListItem key={thread.id} thread={thread} />
+					))}
+					{ungrouped.length === 0 && (
+						<p className="px-2 py-1 text-xs text-muted-foreground">No conversations yet</p>
+					)}
+				</div>
 			</nav>
 			<div className="border-t p-3">
 				<Button

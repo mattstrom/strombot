@@ -1,4 +1,5 @@
 import { ChatView } from '@/components/chat/chat-view';
+import { ProjectDialog } from '@/components/project-dialog';
 import { RenameThreadDialog } from '@/components/rename-thread-dialog';
 import { SettingsDialog } from '@/components/settings-dialog';
 import { Sidebar } from '@/components/sidebar/sidebar';
@@ -13,6 +14,7 @@ export function App() {
 			</div>
 			<SettingsDialog />
 			<RenameThreadDialog />
+			<ProjectDialog />
 		</StoreProvider>
 	);
 }

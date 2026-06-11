@@ -14,13 +14,16 @@ const EmptyState = observer(function EmptyState() {
 });
 
 export const ChatView = observer(function ChatView() {
-	const { chat, conversations } = useStores();
+	const { chat, conversations, projects } = useStores();
 	const hasContent = chat.activeMessages.length > 0 || chat.isStreaming;
+	const projectId = conversations.activeThread?.projectId ?? conversations.pendingProjectId;
+	const project = projectId ? projects.get(projectId) : undefined;
 
 	return (
 		<main className="flex min-w-0 flex-1 flex-col">
 			<header className="titlebar-drag flex h-12 shrink-0 items-center border-b px-4">
 				<h1 className="truncate text-sm font-medium">
+					{project && <span className="text-muted-foreground">{project.name} / </span>}
 					{conversations.activeThread?.title ?? 'New chat'}
 				</h1>
 			</header>
