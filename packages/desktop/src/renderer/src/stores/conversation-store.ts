@@ -4,6 +4,8 @@ import { makeAutoObservable, runInAction } from 'mobx';
 export class ConversationStore {
 	threads: ThreadSummary[] = [];
 	activeThreadId: string | undefined = undefined;
+	renameTargetId: string | undefined = undefined;
+	renameDraft = '';
 
 	constructor() {
 		makeAutoObservable(this);
@@ -18,9 +20,10 @@ export class ConversationStore {
 		runInAction(() => {
 			// The active thread may not be persisted yet (it is materialized on first message).
 			const active = this.activeThread;
-			this.threads = active && !threads.some((thread) => thread.id === active.id)
-				? [active, ...threads]
-				: threads;
+			this.threads =
+				active && !threads.some((thread) => thread.id === active.id)
+					? [active, ...threads]
+					: threads;
 		});
 	}
 
@@ -49,6 +52,33 @@ export class ConversationStore {
 			if (this.activeThreadId === id) {
 				this.activeThreadId = undefined;
 			}
+		});
+	}
+
+	openRenameDialog(id: string): void {
+		const thread = this.threads.find((entry) => entry.id === id);
+		this.renameTargetId = id;
+		this.renameDraft = thread?.title ?? '';
+	}
+
+	closeRenameDialog(): void {
+		this.renameTargetId = undefined;
+		this.renameDraft = '';
+	}
+
+	setRenameDraft(value: string): void {
+		this.renameDraft = value;
+	}
+
+	async submitRename(): Promise<void> {
+		const id = this.renameTargetId;
+		const title = this.renameDraft.trim();
+		if (!id || !title) {
+			return;
+		}
+		await this.rename(id, title);
+		runInAction(() => {
+			this.closeRenameDialog();
 		});
 	}
 

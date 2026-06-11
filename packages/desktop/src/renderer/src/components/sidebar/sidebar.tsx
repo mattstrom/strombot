@@ -1,5 +1,5 @@
 import type { ThreadSummary } from '@shared/types';
-import { MoreHorizontal, Plus, Settings, Trash2 } from 'lucide-react';
+import { MoreHorizontal, Pencil, Plus, Settings, Trash2 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 
 import { Button } from '@/components/ui/button';
@@ -41,6 +41,10 @@ const ThreadListItem = observer(function ThreadListItem({ thread }: { thread: Th
 					</Button>
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="start" side="bottom">
+					<DropdownMenuItem onClick={() => conversations.openRenameDialog(thread.id)}>
+						<Pencil />
+						Rename
+					</DropdownMenuItem>
 					<DropdownMenuItem
 						variant="destructive"
 						onClick={() => void conversations.remove(thread.id)}
