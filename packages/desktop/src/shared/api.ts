@@ -21,6 +21,7 @@ export interface StrombotApi {
 		remove(id: string): Promise<void>;
 		rename(id: string, title: string): Promise<void>;
 		move(id: string, projectId: string | null): Promise<void>;
+		setPinned(id: string, pinned: boolean): Promise<void>;
 		messages(id: string): Promise<ChatMessage[]>;
 	};
 	projects: {

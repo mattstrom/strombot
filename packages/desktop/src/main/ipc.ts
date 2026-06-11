@@ -35,6 +35,7 @@ function toSummary(thread: ThreadLike): ThreadSummary {
 		title,
 		updatedAt: new Date(thread.updatedAt).toISOString(),
 		...(typeof projectId === 'string' ? { projectId } : {}),
+		...(thread.metadata?.pinned === true ? { pinned: true } : {}),
 	};
 }
 
@@ -103,6 +104,24 @@ export function registerIpc(): void {
 				id,
 				title: thread.title ?? '',
 				metadata: { ...thread.metadata, projectId },
+			});
+		},
+	);
+
+	// Stored as an explicit boolean because Mastra merges metadata updates,
+	// so a removed key would not overwrite the old value.
+	ipcMain.handle(
+		'threads:setPinned',
+		async (_event, id: string, pinned: boolean): Promise<void> => {
+			const thread = await getMemory().getThreadById({ threadId: id });
+			if (!thread) {
+				// Not materialized yet — nothing to pin until the first message lands.
+				return;
+			}
+			await getMemory().updateThread({
+				id,
+				title: thread.title ?? '',
+				metadata: { ...thread.metadata, pinned },
 			});
 		},
 	);

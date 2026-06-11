@@ -1,6 +1,11 @@
 import type { ThreadSummary } from '@shared/types';
 import { makeAutoObservable, runInAction } from 'mobx';
 
+// Stable sort, so the updatedAt ordering from the main process holds within each group.
+export function pinnedFirst(threads: ThreadSummary[]): ThreadSummary[] {
+	return [...threads].sort((a, b) => Number(b.pinned ?? false) - Number(a.pinned ?? false));
+}
+
 export class ConversationStore {
 	threads: ThreadSummary[] = [];
 	activeThreadId: string | undefined = undefined;
@@ -18,7 +23,7 @@ export class ConversationStore {
 	}
 
 	threadsInProject(projectId: string): ThreadSummary[] {
-		return this.threads.filter((thread) => thread.projectId === projectId);
+		return pinnedFirst(this.threads.filter((thread) => thread.projectId === projectId));
 	}
 
 	async load(): Promise<void> {
@@ -74,6 +79,18 @@ export class ConversationStore {
 		if (this.pendingProjectId === projectId) {
 			this.pendingProjectId = undefined;
 		}
+	}
+
+	async togglePin(id: string): Promise<void> {
+		const thread = this.threads.find((entry) => entry.id === id);
+		if (!thread) {
+			return;
+		}
+		const pinned = !thread.pinned;
+		await window.api.threads.setPinned(id, pinned);
+		runInAction(() => {
+			thread.pinned = pinned;
+		});
 	}
 
 	async remove(id: string): Promise<void> {

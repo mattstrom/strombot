@@ -24,6 +24,7 @@ const api: StrombotApi = {
 		remove: (id) => ipcRenderer.invoke('threads:remove', id),
 		rename: (id, title) => ipcRenderer.invoke('threads:rename', id, title),
 		move: (id, projectId) => ipcRenderer.invoke('threads:move', id, projectId),
+		setPinned: (id, pinned) => ipcRenderer.invoke('threads:setPinned', id, pinned),
 		messages: (id) => ipcRenderer.invoke('threads:messages', id),
 	},
 	projects: {
