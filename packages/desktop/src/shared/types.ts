@@ -8,6 +8,13 @@ export interface ThreadSummary {
 	id: string;
 	title: string;
 	updatedAt: string;
+	projectId?: string;
+}
+
+export interface Project {
+	id: string;
+	name: string;
+	createdAt: string;
 }
 
 export interface SendMessageRequest {
@@ -15,6 +22,7 @@ export interface SendMessageRequest {
 	threadId: string;
 	message: string;
 	model: string;
+	projectId?: string;
 }
 
 export interface SendMessageResult {

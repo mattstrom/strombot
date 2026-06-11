@@ -4,6 +4,8 @@ import { makeAutoObservable, runInAction } from 'mobx';
 export class ConversationStore {
 	threads: ThreadSummary[] = [];
 	activeThreadId: string | undefined = undefined;
+	// Project that the next new chat lands in (set by "New chat" inside a project).
+	pendingProjectId: string | undefined = undefined;
 	renameTargetId: string | undefined = undefined;
 	renameDraft = '';
 
@@ -13,6 +15,10 @@ export class ConversationStore {
 
 	get activeThread(): ThreadSummary | undefined {
 		return this.threads.find((thread) => thread.id === this.activeThreadId);
+	}
+
+	threadsInProject(projectId: string): ThreadSummary[] {
+		return this.threads.filter((thread) => thread.projectId === projectId);
 	}
 
 	async load(): Promise<void> {
@@ -29,20 +35,45 @@ export class ConversationStore {
 
 	select(id: string): void {
 		this.activeThreadId = id;
+		this.pendingProjectId = undefined;
 	}
 
-	startNewChat(): void {
+	startNewChat(projectId?: string): void {
 		this.activeThreadId = undefined;
+		this.pendingProjectId = projectId;
 	}
 
 	async create(): Promise<ThreadSummary> {
-		const thread = await window.api.threads.create();
+		const thread = await window.api.threads.create(this.pendingProjectId);
 		runInAction(() => {
 			this.threads.unshift(thread);
 			this.activeThreadId = thread.id;
+			this.pendingProjectId = undefined;
 		});
 
 		return thread;
+	}
+
+	async move(id: string, projectId: string | undefined): Promise<void> {
+		await window.api.threads.move(id, projectId ?? null);
+		runInAction(() => {
+			const thread = this.threads.find((entry) => entry.id === id);
+			if (thread) {
+				thread.projectId = projectId;
+			}
+		});
+	}
+
+	// Called when a project is deleted; its threads fall back to the ungrouped list.
+	clearProject(projectId: string): void {
+		for (const thread of this.threads) {
+			if (thread.projectId === projectId) {
+				thread.projectId = undefined;
+			}
+		}
+		if (this.pendingProjectId === projectId) {
+			this.pendingProjectId = undefined;
+		}
 	}
 
 	async remove(id: string): Promise<void> {

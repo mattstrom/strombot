@@ -53,8 +53,8 @@ export class ChatStore {
 		this.draft = value;
 	}
 
-	startNewChat(): void {
-		this.root.conversations.startNewChat();
+	startNewChat(projectId?: string): void {
+		this.root.conversations.startNewChat(projectId);
 		this.error = undefined;
 	}
 
@@ -89,6 +89,9 @@ export class ChatStore {
 				this.loadedThreads.add(thread.id);
 			});
 		}
+		const projectId = this.root.conversations.threads.find(
+			(thread) => thread.id === threadId,
+		)?.projectId;
 
 		const requestId = crypto.randomUUID();
 		runInAction(() => {
@@ -103,6 +106,7 @@ export class ChatStore {
 			threadId,
 			message: content,
 			model: this.root.settings.model,
+			projectId,
 		});
 		if (!result.ok) {
 			runInAction(() => {

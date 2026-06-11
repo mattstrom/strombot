@@ -6,12 +6,14 @@ import { ipcMain } from 'electron';
 import type {
 	ChatChunk,
 	ChatMessage,
+	Project,
 	SendMessageRequest,
 	SendMessageResult,
 	ThreadSummary,
 	UpdateSettings,
 } from '../shared/types';
 import { createAgent, getMemory, RESOURCE_ID } from './mastra/chat';
+import { createProject, listProjects, removeProject, renameProject } from './projects';
 import { getApiKey, getSettings, updateSettings } from './settings';
 
 const aborts = new Map<string, AbortController>();
@@ -20,16 +22,19 @@ interface ThreadLike {
 	id: string;
 	title?: string;
 	updatedAt: Date | string;
+	metadata?: Record<string, unknown>;
 }
 
 function toSummary(thread: ThreadLike): ThreadSummary {
 	// "New Thread <date>" is Mastra's placeholder until the generated title lands.
 	const title = thread.title && !thread.title.startsWith('New Thread') ? thread.title : 'New chat';
+	const projectId = thread.metadata?.projectId;
 
 	return {
 		id: thread.id,
 		title,
 		updatedAt: new Date(thread.updatedAt).toISOString(),
+		...(typeof projectId === 'string' ? { projectId } : {}),
 	};
 }
 
@@ -67,10 +72,11 @@ export function registerIpc(): void {
 	// Threads must reach the database untitled, or Mastra skips title generation.
 	ipcMain.handle(
 		'threads:create',
-		(): ThreadSummary => ({
+		(_event, projectId?: string): ThreadSummary => ({
 			id: randomUUID(),
 			title: 'New chat',
 			updatedAt: new Date().toISOString(),
+			...(projectId ? { projectId } : {}),
 		}),
 	);
 
@@ -81,6 +87,52 @@ export function registerIpc(): void {
 	ipcMain.handle('threads:rename', async (_event, id: string, title: string): Promise<void> => {
 		const thread = await getMemory().getThreadById({ threadId: id });
 		await getMemory().updateThread({ id, title, metadata: thread?.metadata ?? {} });
+	});
+
+	// projectId null clears the assignment. Stored as an explicit null because Mastra
+	// merges metadata updates, so a removed key would not overwrite the old value.
+	ipcMain.handle(
+		'threads:move',
+		async (_event, id: string, projectId: string | null): Promise<void> => {
+			const thread = await getMemory().getThreadById({ threadId: id });
+			if (!thread) {
+				// Not materialized yet — the renderer carries the project onto the first message.
+				return;
+			}
+			await getMemory().updateThread({
+				id,
+				title: thread.title ?? '',
+				metadata: { ...thread.metadata, projectId },
+			});
+		},
+	);
+
+	ipcMain.handle('projects:list', (): Project[] => listProjects());
+
+	ipcMain.handle('projects:create', (_event, name: string): Project => createProject(name));
+
+	ipcMain.handle('projects:rename', (_event, id: string, name: string): void => {
+		renameProject(id, name);
+	});
+
+	// Removing a project keeps its chats; they fall back to the ungrouped list.
+	ipcMain.handle('projects:remove', async (_event, id: string): Promise<void> => {
+		removeProject(id);
+		const { threads } = await getMemory().listThreads({
+			filter: { resourceId: RESOURCE_ID },
+			perPage: false,
+		});
+		await Promise.all(
+			threads
+				.filter((thread) => thread.metadata?.projectId === id)
+				.map((thread) =>
+					getMemory().updateThread({
+						id: thread.id,
+						title: thread.title ?? '',
+						metadata: { ...thread.metadata, projectId: null },
+					}),
+				),
+		);
 	});
 
 	ipcMain.handle('threads:messages', async (_event, id: string): Promise<ChatMessage[]> => {
@@ -114,7 +166,14 @@ export function registerIpc(): void {
 			try {
 				const agent = createAgent(request.model);
 				const stream = await agent.stream(request.message, {
-					memory: { thread: request.threadId, resource: RESOURCE_ID },
+					memory: {
+						// Metadata rides along so the project sticks when Mastra
+						// materializes the thread on the first message.
+						thread: request.projectId
+							? { id: request.threadId, metadata: { projectId: request.projectId } }
+							: request.threadId,
+						resource: RESOURCE_ID,
+					},
 					abortSignal: controller.signal,
 				});
 				for await (const chunk of stream.fullStream) {
