@@ -1,0 +1,36 @@
+{
+  "name": "template-repo",
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "reflect-metadata": "^0.2.2"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.0.1",
+    "@commitlint/config-conventional": "^21.0.1",
+    "@nestjs/cli": "^11.0.21",
+    "@stylistic/eslint-plugin": "^5.10.0",
+    "commitizen": "^4.3.1",
+    "del-cli": "^7.0.0",
+    "husky": "^9.1.7",
+    "nx": "22.7.1",
+    "oxfmt": "^0.51.0",
+    "oxlint": "^1.66.0",
+    "oxlint-tsgolint": "^0.23.0",
+    "plop": "^4.0.5",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14",
+    "vitest": "^4.1.7"
+  }
+}
