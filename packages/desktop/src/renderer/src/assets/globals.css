@@ -1,8 +1,52 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
-@plugin '@tailwindcss/typography';
+
+@source '../../../../../../node_modules/streamdown/dist/*.js';
+@source '../../../../../../node_modules/@streamdown/*/dist/*.js';
 
 @custom-variant dark (&:is(.dark *));
+
+@font-face {
+	font-family: 'Droid Sans';
+	font-style: normal;
+	font-weight: 400;
+	src: url('./fonts/DroidSans.ttf') format('truetype');
+}
+
+@font-face {
+	font-family: 'Droid Sans';
+	font-style: normal;
+	font-weight: 700;
+	src: url('./fonts/DroidSans-Bold.ttf') format('truetype');
+}
+
+@font-face {
+	font-family: 'Droid Serif';
+	font-style: normal;
+	font-weight: 400;
+	src: url('./fonts/DroidSerif-Regular.ttf') format('truetype');
+}
+
+@font-face {
+	font-family: 'Droid Serif';
+	font-style: italic;
+	font-weight: 400;
+	src: url('./fonts/DroidSerif-Italic.ttf') format('truetype');
+}
+
+@font-face {
+	font-family: 'Droid Serif';
+	font-style: normal;
+	font-weight: 700;
+	src: url('./fonts/DroidSerif-Bold.ttf') format('truetype');
+}
+
+@font-face {
+	font-family: 'Droid Serif';
+	font-style: italic;
+	font-weight: 700;
+	src: url('./fonts/DroidSerif-BoldItalic.ttf') format('truetype');
+}
 
 :root {
 	--background: oklch(1 0 0);
@@ -53,6 +97,11 @@
 	--sidebar-foreground: oklch(0.985 0 0);
 }
 
+@theme {
+	--font-sans: 'Droid Sans', ui-sans-serif, system-ui, sans-serif;
+	--font-serif: 'Droid Serif', ui-serif, Georgia, serif;
+}
+
 @theme inline {
 	--color-background: var(--background);
 	--color-foreground: var(--foreground);
@@ -87,7 +136,7 @@
 	}
 
 	body {
-		@apply bg-background text-foreground;
+		@apply bg-background font-sans text-foreground;
 		user-select: none;
 	}
 
