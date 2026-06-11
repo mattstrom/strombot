@@ -1,3 +1,3 @@
-# template-repo
+# Strombot
 
-Template repo for my typical setup
+Custom chat client for all the features that I wish the other chat apps had
