@@ -4,7 +4,8 @@ import { join } from 'node:path';
 
 import { app } from 'electron';
 
-import type { Project } from '../shared/types';
+import type { Project, UpdateProjectInput } from '../shared/types';
+import { ensureProjectDirs, removeProjectDir } from './project-files';
 
 interface StoredProjects {
 	projects: Project[];
@@ -30,6 +31,10 @@ export function listProjects(): Project[] {
 	return readStored().projects;
 }
 
+export function getProject(id: string): Project | undefined {
+	return readStored().projects.find((entry) => entry.id === id);
+}
+
 export function createProject(name: string): Project {
 	const project: Project = {
 		id: randomUUID(),
@@ -39,6 +44,7 @@ export function createProject(name: string): Project {
 	const stored = readStored();
 	stored.projects.push(project);
 	writeStored(stored);
+	ensureProjectDirs(project.id);
 
 	return project;
 }
@@ -52,8 +58,28 @@ export function renameProject(id: string, name: string): void {
 	}
 }
 
+export function updateProject(id: string, update: UpdateProjectInput): void {
+	const stored = readStored();
+	const project = stored.projects.find((entry) => entry.id === id);
+	if (project) {
+		if (update.description !== undefined) {
+			project.description = update.description;
+		}
+		if (update.instructions !== undefined) {
+			project.instructions = update.instructions;
+		}
+		if (update.workspacePath === null) {
+			delete project.workspacePath;
+		} else if (update.workspacePath !== undefined) {
+			project.workspacePath = update.workspacePath;
+		}
+		writeStored(stored);
+	}
+}
+
 export function removeProject(id: string): void {
 	const stored = readStored();
 	stored.projects = stored.projects.filter((entry) => entry.id !== id);
 	writeStored(stored);
+	removeProjectDir(id);
 }

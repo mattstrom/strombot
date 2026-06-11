@@ -16,6 +16,34 @@ export interface Project {
 	id: string;
 	name: string;
 	createdAt: string;
+	description?: string;
+	instructions?: string;
+	// Absolute path of a user-linked workspace folder; absent = internal workspace.
+	workspacePath?: string;
+}
+
+export interface UpdateProjectInput {
+	description?: string;
+	instructions?: string;
+	// null clears the link (undefined means "leave unchanged").
+	workspacePath?: string | null;
+}
+
+export interface WorkspaceFileEntry {
+	// Relative to the workspace root, posix separators.
+	path: string;
+	size: number;
+	mtimeMs: number;
+}
+
+export interface WorkspaceListing {
+	// false when a linked folder is missing or unreadable.
+	ok: boolean;
+	linked: boolean;
+	root: string;
+	files: WorkspaceFileEntry[];
+	truncated: boolean;
+	error?: string;
 }
 
 export interface SendMessageRequest {

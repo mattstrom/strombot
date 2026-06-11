@@ -34,7 +34,8 @@
     "react-dom": "^19.2.7",
     "streamdown": "^2.5.0",
     "tailwind-merge": "^3.6.0",
-    "use-stick-to-bottom": "^1.1.6"
+    "use-stick-to-bottom": "^1.1.6",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.0",

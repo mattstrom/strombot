@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { convertMessages } from '@mastra/core/agent';
-import { ipcMain } from 'electron';
+import { BrowserWindow, dialog, ipcMain } from 'electron';
 
 import type {
 	ChatChunk,
@@ -10,11 +10,28 @@ import type {
 	SendMessageRequest,
 	SendMessageResult,
 	ThreadSummary,
+	UpdateProjectInput,
 	UpdateSettings,
+	WorkspaceListing,
 } from '../shared/types';
 import { createAgent, getMemory, RESOURCE_ID } from './mastra/chat';
-import { createProject, listProjects, removeProject, renameProject } from './projects';
+import type { ProjectChatContext } from './mastra/chat';
+import { readProjectMemory, writeProjectMemory } from './project-files';
+import {
+	createProject,
+	getProject,
+	listProjects,
+	removeProject,
+	renameProject,
+	updateProject,
+} from './projects';
 import { getApiKey, getSettings, updateSettings } from './settings';
+import {
+	addFilesToWorkspace,
+	listWorkspaceFiles,
+	removeWorkspaceFile,
+	revealWorkspaceFile,
+} from './workspace-files';
 
 const aborts = new Map<string, AbortController>();
 
@@ -134,6 +151,92 @@ export function registerIpc(): void {
 		renameProject(id, name);
 	});
 
+	ipcMain.handle('projects:update', (_event, id: string, update: UpdateProjectInput): void => {
+		updateProject(id, update);
+	});
+
+	ipcMain.handle('projects:memory:get', (_event, id: string): string => readProjectMemory(id));
+
+	ipcMain.handle('projects:memory:set', (_event, id: string, content: string): void => {
+		if (getProject(id)) {
+			writeProjectMemory(id, content);
+		}
+	});
+
+	const requireProject = (id: string): Project => {
+		const project = getProject(id);
+		if (!project) {
+			throw new Error(`Unknown project: ${id}`);
+		}
+
+		return project;
+	};
+
+	ipcMain.handle(
+		'projects:files:list',
+		(_event, id: string): WorkspaceListing => listWorkspaceFiles(requireProject(id)),
+	);
+
+	ipcMain.handle(
+		'projects:files:add',
+		(_event, id: string, paths: string[]): WorkspaceListing =>
+			addFilesToWorkspace(requireProject(id), paths),
+	);
+
+	ipcMain.handle(
+		'projects:files:addViaDialog',
+		async (event, id: string): Promise<WorkspaceListing | null> => {
+			const project = requireProject(id);
+			const window = BrowserWindow.fromWebContents(event.sender);
+			if (!window) {
+				return null;
+			}
+			const result = await dialog.showOpenDialog(window, {
+				properties: ['openFile', 'openDirectory', 'multiSelections'],
+			});
+			if (result.canceled || result.filePaths.length === 0) {
+				return null;
+			}
+
+			return addFilesToWorkspace(project, result.filePaths);
+		},
+	);
+
+	ipcMain.handle(
+		'projects:files:remove',
+		(_event, id: string, relPath: string): Promise<WorkspaceListing> =>
+			removeWorkspaceFile(requireProject(id), relPath),
+	);
+
+	ipcMain.handle('projects:files:reveal', (_event, id: string, relPath?: string): void => {
+		revealWorkspaceFile(requireProject(id), relPath);
+	});
+
+	ipcMain.handle('projects:workspace:link', async (event, id: string): Promise<Project | null> => {
+		requireProject(id);
+		const window = BrowserWindow.fromWebContents(event.sender);
+		if (!window) {
+			return null;
+		}
+		const result = await dialog.showOpenDialog(window, {
+			properties: ['openDirectory', 'createDirectory'],
+			message: 'Choose a folder to use as this project’s live workspace',
+		});
+		if (result.canceled || result.filePaths.length === 0) {
+			return null;
+		}
+		updateProject(id, { workspacePath: result.filePaths[0] });
+
+		return requireProject(id);
+	});
+
+	ipcMain.handle('projects:workspace:unlink', (_event, id: string): Project => {
+		requireProject(id);
+		updateProject(id, { workspacePath: null });
+
+		return requireProject(id);
+	});
+
 	// Removing a project keeps its chats; they fall back to the ungrouped list.
 	ipcMain.handle('projects:remove', async (_event, id: string): Promise<void> => {
 		removeProject(id);
@@ -183,13 +286,22 @@ export function registerIpc(): void {
 			const controller = new AbortController();
 			aborts.set(request.requestId, controller);
 			try {
-				const agent = createAgent(request.model);
+				// A stale projectId (project deleted) degrades to an ungrouped chat.
+				const project = request.projectId ? getProject(request.projectId) : undefined;
+				const projectContext: ProjectChatContext | undefined = project
+					? {
+							project,
+							memory: readProjectMemory(project.id),
+							files: listWorkspaceFiles(project),
+						}
+					: undefined;
+				const agent = createAgent(request.model, projectContext);
 				const stream = await agent.stream(request.message, {
 					memory: {
 						// Metadata rides along so the project sticks when Mastra
 						// materializes the thread on the first message.
-						thread: request.projectId
-							? { id: request.threadId, metadata: { projectId: request.projectId } }
+						thread: project
+							? { id: request.threadId, metadata: { projectId: project.id } }
 							: request.threadId,
 						resource: RESOURCE_ID,
 					},

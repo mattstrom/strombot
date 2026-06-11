@@ -112,19 +112,31 @@ const ThreadListItem = observer(function ThreadListItem({ thread }: { thread: Th
 const ProjectListItem = observer(function ProjectListItem({ project }: { project: Project }) {
 	const { chat, conversations, projects } = useStores();
 	const isExpanded = projects.expandedIds.has(project.id);
+	const isActive = projects.activePageId === project.id;
 	const threads = conversations.threadsInProject(project.id);
 
 	return (
 		<div>
-			<div className="group flex items-center rounded-md text-sm hover:bg-accent/60">
+			<div
+				className={cn(
+					'group flex items-center rounded-md text-sm',
+					isActive ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/60',
+				)}
+			>
 				<button
 					type="button"
-					className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-2 text-left"
+					className="shrink-0 py-2 pl-2"
 					onClick={() => projects.toggleExpanded(project.id)}
 				>
 					<ChevronRight
 						className={cn('size-3.5 shrink-0 transition-transform', isExpanded && 'rotate-90')}
 					/>
+				</button>
+				<button
+					type="button"
+					className="flex min-w-0 flex-1 items-center gap-1.5 py-2 pl-1.5 text-left"
+					onClick={() => projects.openPage(project.id)}
+				>
 					<Folder className="size-4 shrink-0 text-muted-foreground" />
 					<span className="truncate">{project.name}</span>
 				</button>
