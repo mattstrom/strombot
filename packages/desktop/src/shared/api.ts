@@ -1,6 +1,9 @@
 import type {
+	BranchSummary,
 	ChatChunk,
 	ChatMessage,
+	CreateBranchRequest,
+	CreateBranchResult,
 	Project,
 	SendMessageRequest,
 	SendMessageResult,
@@ -25,6 +28,10 @@ export interface StrombotApi {
 		move(id: string, projectId: string | null): Promise<void>;
 		setPinned(id: string, pinned: boolean): Promise<void>;
 		messages(id: string): Promise<ChatMessage[]>;
+	};
+	branches: {
+		list(rootThreadId: string): Promise<BranchSummary[]>;
+		create(request: CreateBranchRequest): Promise<CreateBranchResult>;
 	};
 	projects: {
 		list(): Promise<Project[]>;

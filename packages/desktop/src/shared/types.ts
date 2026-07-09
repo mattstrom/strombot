@@ -12,6 +12,32 @@ export interface ThreadSummary {
 	pinned?: boolean;
 }
 
+export type BranchKind = 'edit' | 'regenerate' | 'fork';
+
+export interface BranchSummary {
+	threadId: string;
+	rootThreadId: string;
+	parentThreadId: string;
+	// Index in the parent's visible message list of the first divergent message.
+	forkVisibleIndex: number;
+	kind: BranchKind;
+	createdAt: string;
+}
+
+export interface CreateBranchRequest {
+	rootThreadId: string;
+	sourceThreadId: string;
+	// Index of the acted-on message in the source thread's visible message list.
+	anchorVisibleIndex: number;
+	kind: BranchKind;
+}
+
+export interface CreateBranchResult {
+	branch: BranchSummary;
+	// For 'regenerate': the user message text the caller must re-send.
+	resendText?: string;
+}
+
 export interface Project {
 	id: string;
 	name: string;

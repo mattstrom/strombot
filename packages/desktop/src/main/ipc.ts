@@ -4,8 +4,11 @@ import { convertMessages } from '@mastra/core/agent';
 import { BrowserWindow, dialog, ipcMain } from 'electron';
 
 import type {
+	BranchSummary,
 	ChatChunk,
 	ChatMessage,
+	CreateBranchRequest,
+	CreateBranchResult,
 	Project,
 	SendMessageRequest,
 	SendMessageResult,
@@ -14,6 +17,7 @@ import type {
 	UpdateSettings,
 	WorkspaceListing,
 } from '../shared/types';
+import { computeBranchCut, isBranchThread, toBranchSummary } from './branching';
 import { createAgent, getMemory, RESOURCE_ID } from './mastra/chat';
 import type { ProjectChatContext } from './mastra/chat';
 import { readProjectMemory, writeProjectMemory } from './project-files';
@@ -75,6 +79,22 @@ function toChatMessage(message: UiMessageLike): ChatMessage {
 	};
 }
 
+// Visible messages are what the renderer displays; their ids are the DB message ids.
+// dbMessageIds also covers filtered-out rows (tool calls etc.) in chronological order,
+// so branch clones can carry the full context, not just the displayed turns.
+async function getThreadMessages(
+	threadId: string,
+): Promise<{ dbMessageIds: string[]; visible: ChatMessage[] }> {
+	const { messages } = await getMemory().recall({ threadId, perPage: false });
+	const uiMessages = convertMessages(messages).to('AIV5.UI') as UiMessageLike[];
+	const visible = uiMessages
+		.filter((message) => message.role === 'user' || message.role === 'assistant')
+		.map(toChatMessage)
+		.filter((message) => message.content.length > 0);
+
+	return { dbMessageIds: messages.map((message) => message.id), visible };
+}
+
 export function registerIpc(): void {
 	ipcMain.handle('threads:list', async (): Promise<ThreadSummary[]> => {
 		const { threads } = await getMemory().listThreads({
@@ -83,7 +103,28 @@ export function registerIpc(): void {
 			perPage: false,
 		});
 
-		return threads.map(toSummary);
+		// Branches are hidden threads. The sidebar shows roots only, sorted by the
+		// most recent activity anywhere in the family (saving to a branch does not
+		// touch the root's own updatedAt).
+		const latestByRoot = new Map<string, number>();
+		for (const thread of threads) {
+			const rootId =
+				typeof thread.metadata?.branchRootId === 'string'
+					? thread.metadata.branchRootId
+					: thread.id;
+			const updatedAt = new Date(thread.updatedAt).getTime();
+			latestByRoot.set(rootId, Math.max(latestByRoot.get(rootId) ?? 0, updatedAt));
+		}
+
+		return threads
+			.filter((thread) => !isBranchThread(thread.metadata))
+			.map((thread) =>
+				toSummary({
+					...thread,
+					updatedAt: new Date(latestByRoot.get(thread.id) ?? new Date(thread.updatedAt).getTime()),
+				}),
+			)
+			.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 	});
 
 	// Mints an id only — the agent materializes the thread on the first message.
@@ -99,6 +140,12 @@ export function registerIpc(): void {
 	);
 
 	ipcMain.handle('threads:remove', async (_event, id: string): Promise<void> => {
+		// Removing a root takes its hidden branch threads with it.
+		const { threads: branches } = await getMemory().listThreads({
+			filter: { resourceId: RESOURCE_ID, metadata: { branchRootId: id } },
+			perPage: false,
+		});
+		await Promise.all(branches.map((branch) => getMemory().deleteThread(branch.id)));
 		await getMemory().deleteThread(id);
 	});
 
@@ -258,19 +305,111 @@ export function registerIpc(): void {
 	});
 
 	ipcMain.handle('threads:messages', async (_event, id: string): Promise<ChatMessage[]> => {
-		const { messages } = await getMemory().recall({ threadId: id, perPage: false });
-		const uiMessages = convertMessages(messages).to('AIV5.UI') as UiMessageLike[];
+		const { visible } = await getThreadMessages(id);
 
-		return uiMessages
-			.filter((message) => message.role === 'user' || message.role === 'assistant')
-			.map(toChatMessage)
-			.filter((message) => message.content.length > 0);
+		return visible;
 	});
+
+	ipcMain.handle(
+		'branches:create',
+		async (_event, request: CreateBranchRequest): Promise<CreateBranchResult> => {
+			const { rootThreadId, sourceThreadId, anchorVisibleIndex, kind } = request;
+			const { dbMessageIds, visible } = await getThreadMessages(sourceThreadId);
+			const cut = computeBranchCut(visible, anchorVisibleIndex, kind);
+
+			const root = await getMemory().getThreadById({ threadId: rootThreadId });
+			const projectId =
+				typeof root?.metadata?.projectId === 'string' ? root.metadata.projectId : undefined;
+
+			// Lift the attachment point: while the fork lands at or before the candidate
+			// parent's own divergence point, the new branch is really an alternative to
+			// that ancestor (or its shared prefix), so it joins that sibling group.
+			// This keeps repeated edits of the same message in one flat ‹ n/m › group.
+			let parentThreadId = sourceThreadId;
+			for (;;) {
+				const candidate = await getMemory().getThreadById({ threadId: parentThreadId });
+				const candidateBranch = candidate ? toBranchSummary(candidate) : undefined;
+				if (!candidateBranch || cut.forkVisibleIndex > candidateBranch.forkVisibleIndex) {
+					break;
+				}
+				parentThreadId = candidateBranch.parentThreadId;
+			}
+
+			// The explicit title keeps Mastra from spending a Haiku call titling a hidden thread.
+			const title = 'Branch';
+			const metadata = {
+				branchRootId: rootThreadId,
+				parentThreadId,
+				forkVisibleIndex: cut.forkVisibleIndex,
+				forkKind: kind,
+				...(projectId ? { projectId } : {}),
+			};
+
+			let prefixIds = dbMessageIds;
+			if (cut.boundaryMessageId) {
+				const boundary = dbMessageIds.indexOf(cut.boundaryMessageId);
+				if (boundary === -1) {
+					throw new Error('Branch point not found in thread history.');
+				}
+				prefixIds = dbMessageIds.slice(0, boundary);
+			}
+
+			// cloneThread treats an empty messageIds filter as "no filter" and would copy
+			// everything, so an empty prefix (branching at the first message) gets a fresh
+			// thread instead.
+			const thread =
+				prefixIds.length === 0
+					? await getMemory().createThread({ resourceId: RESOURCE_ID, title, metadata })
+					: (
+							await getMemory().cloneThread({
+								sourceThreadId,
+								title,
+								metadata,
+								...(prefixIds.length === dbMessageIds.length
+									? {}
+									: { options: { messageFilter: { messageIds: prefixIds } } }),
+							})
+						).thread;
+
+			return {
+				branch: {
+					threadId: thread.id,
+					rootThreadId,
+					parentThreadId,
+					forkVisibleIndex: cut.forkVisibleIndex,
+					kind,
+					createdAt: new Date(thread.createdAt).toISOString(),
+				},
+				...(cut.resendText === undefined ? {} : { resendText: cut.resendText }),
+			};
+		},
+	);
+
+	ipcMain.handle(
+		'branches:list',
+		async (_event, rootThreadId: string): Promise<BranchSummary[]> => {
+			const { threads } = await getMemory().listThreads({
+				filter: { resourceId: RESOURCE_ID, metadata: { branchRootId: rootThreadId } },
+				orderBy: { field: 'createdAt', direction: 'ASC' },
+				perPage: false,
+			});
+
+			return threads
+				.map(toBranchSummary)
+				.filter((branch): branch is BranchSummary => branch !== undefined);
+		},
+	);
 
 	ipcMain.handle(
 		'chat:send',
 		async (event, request: SendMessageRequest): Promise<SendMessageResult> => {
-			const apiKey = getApiKey();
+			let apiKey: string | undefined;
+			try {
+				apiKey = getApiKey();
+			} catch (error) {
+				// e.g. safeStorage cannot decrypt the stored key on this machine.
+				return { ok: false, error: error instanceof Error ? error.message : String(error) };
+			}
 			if (!apiKey) {
 				return { ok: false, error: 'No API key configured. Add one in Settings.' };
 			}
