@@ -14,8 +14,12 @@ const EmptyState = observer(function EmptyState() {
 });
 
 export const ChatView = observer(function ChatView() {
-	const { chat, conversations, projects } = useStores();
-	const hasContent = chat.activeMessages.length > 0 || chat.isStreaming;
+	const { branches, chat, conversations, projects } = useStores();
+	const rootId = conversations.activeThreadId;
+	// An empty branch (fresh fork, failed regenerate) still needs the message
+	// list so its branch selectors stay reachable.
+	const hasSelectors = rootId ? branches.selectorsFor(rootId).size > 0 : false;
+	const hasContent = chat.activeMessages.length > 0 || chat.isStreaming || hasSelectors;
 	const projectId = conversations.activeThread?.projectId ?? conversations.pendingProjectId;
 	const project = projectId ? projects.get(projectId) : undefined;
 

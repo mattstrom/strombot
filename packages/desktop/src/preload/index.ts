@@ -27,6 +27,10 @@ const api: StrombotApi = {
 		setPinned: (id, pinned) => ipcRenderer.invoke('threads:setPinned', id, pinned),
 		messages: (id) => ipcRenderer.invoke('threads:messages', id),
 	},
+	branches: {
+		list: (rootThreadId) => ipcRenderer.invoke('branches:list', rootThreadId),
+		create: (request) => ipcRenderer.invoke('branches:create', request),
+	},
 	projects: {
 		list: () => ipcRenderer.invoke('projects:list'),
 		create: (name) => ipcRenderer.invoke('projects:create', name),
